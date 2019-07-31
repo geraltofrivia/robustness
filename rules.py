@@ -61,15 +61,6 @@ class Rule:
                 print("AFTER :", op)
                 print('---')
 
-        for doc in neg_ex:
-            changed, op = ruletwo.apply(doc)
-            y_pred.append(1 if changed else 0)
-
-            if self.verbose:
-                print("BEFORE:", doc)
-                print("AFTER :", op)
-                print('---')
-
         print(y_true)
         print(y_pred)
         print(confusion_matrix(y_true, y_pred))
@@ -94,42 +85,42 @@ class RuleOne(Rule):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        self.pattern = [{'LOWER': 'what'}, {'POS': 'VERB'}]
-        self.matcher.add("RuleOne", None, self.pattern)
+        # Not using spaCy patterns. Simple rules.
+
+    @staticmethod
+    def _can_be_applied_(sequence) -> bool:
+        """Internal fn which tells whether this rule can be applied on this sentence/sequence"""
+        return sequence[0].lower_ == 'what' and sequence[1].lower_ in ['is', 'are']
 
     def apply(self, sequence: spacy.tokens.doc.Doc, probability: float = 1) -> Union[str, spacy.tokens.doc.Doc]:
         """See base class"""
-        matches = self.matcher(sequence)
         altered_seq = ''
+        applied = False
 
-        if not matches:
-            if self.verbose: print("RuleOne not applied.")
-            return False, sequence
-
-        old_end_id = 0
-        for match_id, start_id, end_id in matches:
-            if start_id == 0:
-                altered_seq += "What's "
-                old_end_id = end_id
+        for sentence in sequence.sents:
+            if self._can_be_applied_(sentence):
+                altered_seq += "What's"
+                altered_seq += sentence[2:].text + '. '
+                applied = True
             else:
-                altered_seq += sequence[old_end_id:start_id].text
-                altered_seq += " What's "
-                old_end_id = end_id
-        altered_seq += sequence[old_end_id:].text
-
-        return True, self.nlp(altered_seq)
+                altered_seq += sentence.text + '. '
+        return applied, self.nlp(altered_seq)
 
     @staticmethod
     def examples():
         pos_ex, neg_ex = [], []
-        pos_ex += ["what is the meaning of life?",
-                   "Well I've been in the desert on a horse with no name. It feels good to be out of the shade. "
-                   "What is life even? In the desert no one can remember your name.",
-                   "This is a first sentence. What is a second sentence? This is the third sentence. What are fourth sentences?",
-                   "What works for you?"]
-        neg_ex += ["which are reptiles?",
-                   "what color is UK buses?",
-                   "What's the meaning of life?"]
+        pos_ex += [
+            "what is the meaning of life?",
+            "Well I've been in the desert on a horse with no name. It feels good to be out of the shade. "
+            "What is life even? In the desert no one can remember your name.",
+            "This is a first sentence. What is a second sentence? This is the third sentence. What are fourth sentences?",
+        ]
+        neg_ex += [
+            "which are reptiles?",
+            "what color is UK buses?",
+            "What's the meaning of life?",
+            "What works for you?"
+        ]
         return pos_ex, neg_ex
 
 
