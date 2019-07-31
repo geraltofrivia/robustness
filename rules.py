@@ -18,7 +18,7 @@ class Rule:
         self.counter_applied = 0
         self.verbose = verbose
 
-    def apply(self, sequence: spacy.tokens.doc.Doc, probability: float) -> (bool, Union[str, spacy.tokens.doc.Doc]):
+    def apply(self, sequence: spacy.tokens.doc.Doc, probability: float = 1) -> (bool, Union[str, spacy.tokens.doc.Doc]):
         """
             Apply this rule given this sequence
         :param sequence: a spacy doc of a string (preprocessed)
@@ -38,6 +38,13 @@ class Rule:
 
     @staticmethod
     def examples():
+        """
+            A bunch of positive and negative examples for this rule.
+            Positive -> the rule can be applied
+            Negative -> the rule should not be applied
+
+        :return:
+        """
         raise NotImplementedError("Examples are not specified for this class")
 
     def test(self):
@@ -53,7 +60,7 @@ class Rule:
         neg_ex = [self.nlp(doc) for doc in neg_ex]
 
         for doc in pos_ex + neg_ex:
-            changed, op = ruletwo.apply(doc)
+            changed, op = self.apply(doc)
             y_pred.append(1 if changed and op.text != doc.text else 0)
 
             if self.verbose:
@@ -82,15 +89,10 @@ class RuleOne(Rule):
             Original intended task was `Machine Comprehension`
     """
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-
-        # Not using spaCy patterns. Simple rules.
-
     @staticmethod
     def _can_be_applied_(sequence) -> bool:
         """Internal fn which tells whether this rule can be applied on this sentence/sequence"""
-        return sequence[0].lower_ == 'what' and sequence[1].lower_ in ['is', 'are']
+        return sequence[0].lower_ == 'what' and sequence[1].lower_ in ['is', 'are', 'was', 'were']
 
     def apply(self, sequence: spacy.tokens.doc.Doc, probability: float = 1) -> Union[str, spacy.tokens.doc.Doc]:
         """See base class"""
@@ -100,11 +102,11 @@ class RuleOne(Rule):
         for sentence in sequence.sents:
             if self._can_be_applied_(sentence):
                 altered_seq += "What's"
-                altered_seq += sentence[2:].text + '. '
+                altered_seq += sentence[2:].text
                 applied = True
             else:
-                altered_seq += sentence.text + '. '
-        return applied, self.nlp(altered_seq)
+                altered_seq += sentence.text
+        return applied, self.nlp(altered_seq) if applied else (False, sequence)
 
     @staticmethod
     def examples():
@@ -113,7 +115,7 @@ class RuleOne(Rule):
             "what is the meaning of life?",
             "Well I've been in the desert on a horse with no name. It feels good to be out of the shade. "
             "What is life even? In the desert no one can remember your name.",
-            "This is a first sentence. What is a second sentence? This is the third sentence. What are fourth sentences?",
+            "This is a first sentence. What is a second sentence? This is the third sentence. What are fourth sentences?"
         ]
         neg_ex += [
             "which are reptiles?",
@@ -185,8 +187,85 @@ class RuleTwo(Rule):
         return pos_ex, neg_ex
 
 
+class RuleThree(Rule):
+    """
+        **Transformation**:
+            What VERB -> So what VERB
+
+        **Source**:
+            [Paper] Semantically Equivalent Adversarial Rulesfor Debugging NLP Models
+
+        **Examples**
+            before: What was Gandhi's work called?
+            after: So what was Gandhi's work called?
+
+        **Comment**
+            Original intended task was `Machine Comprehension/Visual Question Answering`
+    """
+
+    def apply(self, sequence: spacy.tokens.doc.Doc, probability: float = 1) -> (bool, Union[str, spacy.tokens.doc.Doc]):
+        """See base class"""
+
+        applied = False
+        alt_sequence = ''
+
+        '''
+            Rule application logic
+                -> if 'what' appears in seq
+                    -> if 'so' does not appear before it
+                    -> if 'VERB' is the pos tag of the next token
+                        -> yes 
+        '''
+
+        for sentence in sequence.sents:
+            for i in range(len(sentence)):
+
+                if sentence[i].lower_ == 'what':
+
+                    if i > 0:
+                        if sentence[i - 1].lower_ == 'so':
+                            alt_sequence += sentence[i].text + ' '
+                            continue
+
+                    if i < len(sentence) - 1:
+                        if sentence[i + 1].pos_ != 'VERB':
+                            alt_sequence += sentence[i].text + ' '
+                            continue
+
+                    applied = True
+                    alt_sequence += 'So ' if i == 0 else 'so '
+                    alt_sequence += 'what '
+
+                else:
+                    alt_sequence += sentence[i].text + ' '
+
+        return (True, self.nlp(alt_sequence)) if applied else (False, sequence)
+
+    @staticmethod
+    def examples():
+        pos_ex, neg_ex = [], []
+        pos_ex += [
+            "What was Gandhi's work called?",
+            "What's the point of working like this?",
+            "what is the meaning of life?",
+            "It is the desert. What is life even? In the desert no one can remember your name.",
+            "This is a first sentence. What is a second sentence? This is the third sentence. What are fourth sentences?",
+            "So what if you think what runs will keep on running?",
+            "what if you think what runs will keep on running?",
+
+        ]
+        neg_ex += [
+            "So what was Gandhi's work called?",
+            "Which is the meaning of life?",
+            "It is the desert. So what is life even?",
+            "What Gaurav said.",
+            "What Barack Obama ate this week?"
+        ]
+        return pos_ex, neg_ex
+
+
 if __name__ == "__main__":
     nlp = spacy.load("en_core_web_sm")
-    ruletwo = RuleOne(nlp, verbose=True)
+    rule = RuleThree(nlp, verbose=True)
 
-    ruletwo.test()
+    rule.test()
