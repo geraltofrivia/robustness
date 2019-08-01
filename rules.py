@@ -203,41 +203,41 @@ class RuleThree(Rule):
             Original intended task was `Machine Comprehension/Visual Question Answering`
     """
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        self.pattern = [{'LOWER': 'what'}, {'POS': 'VERB'}]
+        self.matcher.add("RuleTwo", None, self.pattern)
+
     def apply(self, sequence: spacy.tokens.doc.Doc, probability: float = 1) -> (bool, Union[str, spacy.tokens.doc.Doc]):
         """See base class"""
-
         applied = False
+        matches = self.matcher(sequence)
         alt_sequence = ''
 
         '''
             Rule application logic
-                -> if 'what' appears in seq
+                -> if 'what VERB' appears in seq
                     -> if 'so' does not appear before it
-                    -> if 'VERB' is the pos tag of the next token
-                        -> yes 
+                    
+            @TODO: fix 
+                BEFORE: What's the point of working like this?
+                AFTER : So what 's the point of working like this? (EXTRA SPACE)
         '''
 
-        for sentence in sequence.sents:
-            for i in range(len(sentence)):
-
-                if sentence[i].lower_ == 'what':
-
-                    if i > 0:
-                        if sentence[i - 1].lower_ == 'so':
-                            alt_sequence += sentence[i].text + ' '
-                            continue
-
-                    if i < len(sentence) - 1:
-                        if sentence[i + 1].pos_ != 'VERB':
-                            alt_sequence += sentence[i].text + ' '
-                            continue
-
-                    applied = True
-                    alt_sequence += 'So ' if i == 0 else 'so '
-                    alt_sequence += 'what '
-
-                else:
-                    alt_sequence += sentence[i].text + ' '
+        old_end_id = 0
+        for match_id, start_id, end_id in matches:
+            applied = True
+            if start_id == 0:
+                alt_sequence += "So what "
+                old_end_id = end_id - 1
+            else:
+                if sequence[start_id-1].lower_ == 'so':
+                    continue
+                alt_sequence += sequence[old_end_id:start_id].text
+                alt_sequence += " so "
+                old_end_id = end_id - 1
+        alt_sequence += sequence[old_end_id:].text
 
         return (True, self.nlp(alt_sequence)) if applied else (False, sequence)
 
