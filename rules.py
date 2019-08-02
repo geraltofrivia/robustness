@@ -1,11 +1,13 @@
 """ File which has implementation of all the rules"""
 from typing import Union
+from sklearn.metrics import confusion_matrix
 
 # spaCy imports
 import spacy
-from sklearn.metrics import confusion_matrix
 from spacy.matcher import Matcher
 
+# Local imports
+import utils
 
 class Rule:
     """Abstract class for common functionality of rules"""
@@ -55,7 +57,7 @@ class Rule:
         y_true = [1 for _ in pos_ex] + [0 for _ in neg_ex]
         y_pred = []
 
-        # Documentize these fuckers
+        # Document-ize these
         pos_ex = [self.nlp(doc) for doc in pos_ex]
         neg_ex = [self.nlp(doc) for doc in neg_ex]
 
@@ -229,13 +231,18 @@ class RuleThree(Rule):
         for match_id, start_id, end_id in matches:
             applied = True
             if start_id == 0:
-                alt_sequence += "So what "
+                alt_sequence += "So what"
+                if utils.need_space(token=sequence[start_id], doc=sequence): alt_sequence += ' '
                 old_end_id = end_id - 1
             else:
                 if sequence[start_id-1].lower_ == 'so':
                     continue
-                alt_sequence += sequence[old_end_id:start_id].text
-                alt_sequence += " so "
+                # Add existing sequence to the alt_seq
+                alt_sequence += sequence[old_end_id:start_id].text_with_ws
+
+                # If we're in a new sentence, add "So" else "so"
+                alt_sequence += "So what" if sequence[start_id-1].is_sent_start else "so what"
+                if utils.need_space(token=sequence[start_id], doc=sequence): alt_sequence += ' '
                 old_end_id = end_id - 1
         alt_sequence += sequence[old_end_id:].text
 

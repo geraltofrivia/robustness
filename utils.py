@@ -12,12 +12,4 @@ def need_space(token: spacy.tokens.Token, doc: spacy.tokens.Doc) -> bool:
     :param doc: the doc/span/sent where the token exists
     :return: bool
     """
-    # If last blank, say no.
-    i = token.i
-    l = len(token)
-
-    if i == len(doc)-1:
-        return False
-
-    relevant_span = doc[i: i + 1]
-    return relevant_span.text[l: l+1] == ' '
+    return len(token.text) != len(token.text_with_ws)
