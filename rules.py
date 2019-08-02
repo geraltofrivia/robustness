@@ -98,17 +98,21 @@ class RuleOne(Rule):
 
     def apply(self, sequence: spacy.tokens.doc.Doc, probability: float = 1) -> Union[str, spacy.tokens.doc.Doc]:
         """See base class"""
-        altered_seq = ''
+        alt_sequence = ''
         applied = False
 
         for sentence in sequence.sents:
             if self._can_be_applied_(sentence):
-                altered_seq += "What's"
-                altered_seq += sentence[2:].text
+                # If this is not the first sentence, check if the token _before_ this had space and add accordingly
+                # if sentence[0].i != 0:
+                #     alt_sequence += utils.need_space_after_(token=sequence[sentence[0].i-1])
+                alt_sequence += "What's"
+                alt_sequence += utils.need_space_after_(token=sentence[1])
+                alt_sequence += sentence[2:].text_with_ws
                 applied = True
             else:
-                altered_seq += sentence.text
-        return applied, self.nlp(altered_seq) if applied else (False, sequence)
+                alt_sequence += sentence.text_with_ws
+        return (applied, self.nlp(alt_sequence)) if applied else (False, sequence)
 
     @staticmethod
     def examples():
@@ -229,20 +233,22 @@ class RuleThree(Rule):
 
         old_end_id = 0
         for match_id, start_id, end_id in matches:
-            applied = True
             if start_id == 0:
+                applied = True
                 alt_sequence += "So what"
-                if utils.need_space(token=sequence[start_id], doc=sequence): alt_sequence += ' '
+                if utils.need_space_after(token=sequence[start_id]):
+                    alt_sequence += ' '
                 old_end_id = end_id - 1
             else:
                 if sequence[start_id-1].lower_ == 'so':
                     continue
+                applied = True
                 # Add existing sequence to the alt_seq
                 alt_sequence += sequence[old_end_id:start_id].text_with_ws
 
                 # If we're in a new sentence, add "So" else "so"
                 alt_sequence += "So what" if sequence[start_id-1].is_sent_start else "so what"
-                if utils.need_space(token=sequence[start_id], doc=sequence): alt_sequence += ' '
+                if utils.need_space_after(token=sequence[start_id]): alt_sequence += ' '
                 old_end_id = end_id - 1
         alt_sequence += sequence[old_end_id:].text
 
@@ -256,12 +262,11 @@ class RuleThree(Rule):
             "What's the point of working like this?",
             "what is the meaning of life?",
             "It is the desert. What is life even? In the desert no one can remember your name.",
-            "This is a first sentence. What is a second sentence? This is the third sentence. What are fourth sentences?",
-            "So what if you think what runs will keep on running?",
-            "what if you think what runs will keep on running?",
-
+            "This is a first sentence. What is a second sentence? This is the third sentence. What are fourth sentences?"
         ]
         neg_ex += [
+            "So what if you think what runs will keep on running?",
+            "what if you think what runs will keep on running?",
             "So what was Gandhi's work called?",
             "Which is the meaning of life?",
             "It is the desert. So what is life even?",
@@ -273,6 +278,6 @@ class RuleThree(Rule):
 
 if __name__ == "__main__":
     nlp = spacy.load("en_core_web_sm")
-    rule = RuleThree(nlp, verbose=True)
+    rule = RuleOne(nlp, verbose=True)
 
     rule.test()
