@@ -277,8 +277,65 @@ class RuleThree(Rule):
         return pos_ex, neg_ex
 
 
+class RuleFour(Rule):
+    """
+        **Transformation**:
+            What VBD -> And what VBD
+
+        **Source**:
+            [Paper] Semantically Equivalent Adversarial Rulesfor Debugging NLP Models
+
+        **Examples**
+            before: What was Kenneth Sweezy's job?
+            after: And what was Kenneth Sweezy's job?
+
+        **Comment**
+            Original intended task was `Machine Comprehension/Visual Question Answering`
+            Only applicable when `what` is at sentence start.
+    """
+
+    def apply(self, sequence: spacy.tokens.doc.Doc, probability: float = 1) -> (bool, Union[str, spacy.tokens.doc.Doc]):
+        """See base class"""
+        applied = False
+        alt_sequence = ''
+
+        for sentence in sequence.sents:
+            if sentence[0].lower_ == 'what' and sentence[1].tag_ == 'VBD':
+                # Apply Rule
+                alt_sequence += 'And what'
+                alt_sequence += utils.need_space_after_(sentence[0])
+                alt_sequence += sentence[1:].text_with_ws
+
+                applied = True
+            else:
+                alt_sequence += sentence.text_with_ws
+
+        return (True, self.nlp(alt_sequence)) if applied else (False, sequence)
+
+    @staticmethod
+    def examples():
+        pos_ex, neg_ex = [], []
+        pos_ex += [
+            "What was Gandhi's work called?",
+            "what was it you said was the meaning of life?",
+            "It is the desert. What used to be life even? In the desert no one can remember your name.",
+            "This is a first sentence. What was the second sentence? This is what was supposed to be the third one?"
+        ]
+        neg_ex += [
+            "And what was that you said?",
+            "What's the point of working like this?",
+            "what if you think what runs will keep on running?",
+            "So what was Gandhi's work called?",
+            "Which is the meaning of life?",
+            "It is the desert. So what is life even?",
+            "What Gaurav said.",
+            "What Barack Obama ate this week?"
+        ]
+        return pos_ex, neg_ex
+
+
 if __name__ == "__main__":
     nlp = spacy.load("en_core_web_sm")
-    rule = RuleTwo(nlp, verbose=True)
+    rule = RuleFour(nlp, verbose=True)
 
     rule.test()
