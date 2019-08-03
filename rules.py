@@ -186,6 +186,7 @@ class RuleTwo(Rule):
             "what color is UK buses?"
         ]
         neg_ex += [
+            "What's color of Indian taxis?",
             "which are reptiles?",
             "What's the meaning of life?",
             "This is a first sentence. What is the second sentence? This is the third sentence. What are fourth sentences?"
@@ -236,8 +237,7 @@ class RuleThree(Rule):
             if start_id == 0:
                 applied = True
                 alt_sequence += "So what"
-                if utils.need_space_after(token=sequence[start_id]):
-                    alt_sequence += ' '
+                alt_sequence += utils.need_space_after_(token=sequence[start_id])
                 old_end_id = end_id - 1
             else:
                 if sequence[start_id-1].lower_ == 'so':
@@ -248,7 +248,8 @@ class RuleThree(Rule):
 
                 # If we're in a new sentence, add "So" else "so"
                 alt_sequence += "So what" if sequence[start_id-1].is_sent_start else "so what"
-                if utils.need_space_after(token=sequence[start_id]): alt_sequence += ' '
+                
+                alt_sequence += utils.need_space_after_(token=sequence[start_id])
                 old_end_id = end_id - 1
         alt_sequence += sequence[old_end_id:].text
 
@@ -278,6 +279,6 @@ class RuleThree(Rule):
 
 if __name__ == "__main__":
     nlp = spacy.load("en_core_web_sm")
-    rule = RuleOne(nlp, verbose=True)
+    rule = RuleTwo(nlp, verbose=True)
 
     rule.test()
