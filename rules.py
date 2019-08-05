@@ -6,6 +6,9 @@ from sklearn.metrics import confusion_matrix
 import spacy
 from spacy.matcher import Matcher
 
+# pattern imports
+from pattern.en import conjugate, lemma, lexeme, tenses
+
 # Local imports
 import utils
 
@@ -399,6 +402,129 @@ class RuleFive(Rule):
         ]
         return pos_ex, neg_ex
 
+
+class RuleThirteen(Rule):
+    """
+        **Transformation**:
+
+
+            To create inflexions by switching one of the verb in the sentence to its other tense. This would result in
+            verb disagreement.
+
+        **Source**:
+            [Paper] The CoNLL-2014 Shared Task on Grammatical Error Correction
+
+        **Examples**
+            before: Medical technology during that time *was* not advanced enough to cure him. ->
+            after: Medical technology during that time *is* not advanced enough to cure him.
+
+        **Comment**
+            Original intended task was `Grammar correction`
+    """
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        self.pattern = [{'POS': 'VERB'}]
+        self.matcher.add("VerbSwitch", None, self.pattern)
+
+    def apply(self, sequence: spacy.tokens.doc.Doc, probability: float = 1.0) -> (
+    bool, Union[str, spacy.tokens.doc.Doc]):
+        """See base class"""
+        applied = False
+        alt_sequence = ''
+
+        '''
+            Rule application logic
+                -> if single 'VERB' appears in seq
+                    -> Flip it with some randomly selected variant of its verb variant 
+                -> if more than one verb appears in the sequence, 
+                    -> Select one of the verb randomly and flip it. 
+        '''
+
+        for sent in sequence.sents:
+            print(sent)
+
+            # Apply matcher at each instance.
+            matches = self.matcher(sent.as_doc())  # as_doc might be buggy.
+            seq = ''
+
+            # Randomly select one if the number oif matches are less than 3 else select 2 (arbitary number)
+            if matches:
+                if len(matches) < 3:
+                    match = random.choices(matches, k=1)
+                else:
+                    match = random.choices(matches, k=1)
+
+            else:
+                alt_sequence += sent[:].text_with_ws
+                continue
+
+            old_end_id = 0
+
+            for match_id, start_id, end_id in match:
+                print(start_id, end_id)
+                print(sent[start_id].text)
+                # Generate the word.
+                new_word = self.verb_fom(word=sent[start_id].text)
+
+                # if the new generated word is not same than we have inflected the sentence.
+                if new_word != sent[start_id].text:
+                    applied = True
+
+                if start_id != 0:
+                    seq += sent[old_end_id:start_id].text_with_ws
+                    seq += new_word
+                    seq += utils.need_space_after_(token=sequence[start_id])
+                    old_end_id = end_id
+
+                else:
+                    seq += new_word.capitalize()  # Capitalize it.
+                    seq += utils.need_space_after_(token=sequence[start_id])
+                    old_end_id = end_id
+
+            seq += sent[old_end_id:].text_with_ws
+            alt_sequence += seq
+        return (True, self.nlp(alt_sequence)) if applied else (False, sequence)
+
+    @staticmethod
+    def examples():
+        pos_ex, neg_ex = [], []
+        pos_ex += [
+            "Medical technology during that time was not advanced enough to cure him. This is America",
+            "Medical technology during that time is not advanced enough to cure him.",
+            "This is America!"
+        ]
+        return pos_ex, neg_ex
+
+    @staticmethod
+    def verb_fom(word: str) -> str:
+
+        # Step 1: check if the word is in present tense or past.
+        tense_list = tenses(word)
+
+        present_tense = True
+
+        for index, i in enumerate(tense_list):
+            if i[0] == 'present':
+                present_tense = True
+                final_tense = i
+                break
+            if i[0] == 'past':
+                present_tense = False
+                final_tense = i
+                break
+
+        if present_tense:
+            tense_string = "past"
+        else:
+            tense_string = "present"
+
+        # Step 2: Create
+        new_word = conjugate(word, tense=tense_string, person=final_tense[1], number=final_tense[2], negated=False)
+
+        # Step 3: Return the word
+        return new_word
 
 if __name__ == "__main__":
     nlp = spacy.load("en_core_web_sm")
