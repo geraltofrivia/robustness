@@ -334,8 +334,74 @@ class RuleFour(Rule):
         return pos_ex, neg_ex
 
 
+class RuleFive(Rule):
+    """
+        **Transformation**:
+            WP VBZ -> WP's
+
+        **Source**:
+            [Paper] Semantically Equivalent Adversarial Rulesfor Debugging NLP Models
+
+        **Examples**
+            before: What has been cut?
+            after: What's been cut?
+
+        **Comment**
+        Original intended task was `Visual Question Answering`
+    """
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        self.pattern = [{'TAG': 'WP'}, {'TAG': 'VBZ'}]
+        self.matcher.add("RuleTwo", None, self.pattern)
+
+    def apply(self, sequence: spacy.tokens.doc.Doc, probability: float = 1) -> (bool, Union[str, spacy.tokens.doc.Doc]):
+        """See base class"""
+        applied = False
+        matches = self.matcher(sequence)
+        alt_sequence = ''
+
+        old_end_id = 0
+        for match_id, start_id, end_id in matches:
+            applied = True
+            if start_id == 0:
+                alt_sequence += sequence[start_id].text + "'s"
+                alt_sequence += utils.need_space_after_(token=sequence[end_id])
+                old_end_id = end_id
+            else:
+                # Add existing sequence to the alt_seq
+                alt_sequence += sequence[old_end_id:start_id].text_with_ws
+
+                # If we're in a new sentence, add "So" else "so"
+                alt_sequence += sequence[start_id].text + "'s"
+                alt_sequence += utils.need_space_after_(token=sequence[end_id])
+                old_end_id = end_id
+        alt_sequence += sequence[old_end_id:].text
+
+        return (True, self.nlp(alt_sequence)) if applied else (False, sequence)
+
+    @staticmethod
+    def examples():
+        pos_ex, neg_ex = [], []
+        pos_ex += [
+            "What is being cut?",
+            "What has been cut? ",
+            "Here's what is: this shit sucks.",
+            "Is this what is being cut?"
+        ]
+        neg_ex += [
+            "What will be cut?",
+            "Which running is preferred.",
+            "Where is the crowd running towards?",
+            "Is this what putting feels like?",
+            "What Barack Obama ate this week?"
+        ]
+        return pos_ex, neg_ex
+
+
 if __name__ == "__main__":
     nlp = spacy.load("en_core_web_sm")
-    rule = RuleFour(nlp, verbose=True)
+    rule = RuleFive(nlp, verbose=True)
 
     rule.test()
