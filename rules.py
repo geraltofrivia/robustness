@@ -1,4 +1,5 @@
 """ File which has implementation of all the rules"""
+import random
 from typing import Union
 from sklearn.metrics import confusion_matrix
 
@@ -11,7 +12,11 @@ from pattern.en import conjugate, lemma, lexeme, tenses
 
 # Local imports
 import utils
+<<<<<<< HEAD
 from resources import gb_us
+=======
+from resources import resources as res
+>>>>>>> ae18bb388b567bc86a0badb789c63a27dceb0fde
 
 class Rule:
     """Abstract class for common functionality of rules"""
@@ -204,7 +209,7 @@ class Rule3(Rule):
             What VERB -> So what VERB
 
         **Source**:
-            [Paper] Semantically Equivalent Adversarial Rulesfor Debugging NLP Models
+            [Paper] Semantically Equivalent Adversarial Rules for Debugging NLP Models
 
         **Examples**
             before: What was Gandhi's work called?
@@ -579,6 +584,117 @@ class Rule14(Rule):
 
         # Step 3: Return the word
         return new_word
+
+
+class Rule15(Rule):
+    """
+        **Transformation**:
+
+
+            To create inflexions by switching one of the modal verb in the sentence to its other tense.
+            This would result in modal verb disagreement.
+
+        **Source**:
+            [Paper] The CoNLL-2014 Shared Task on Grammatical Error Correction
+
+        **Examples**
+            before: Although the problem would not be serious, people would still be afraid.
+            after: Although the problem may not be serious, people might still be afraid.
+
+        **Comment**
+            Original intended task was `Grammar correction`
+    """
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        for mod in res.modal_verbs:
+            self.matcher.add(mod,None,[{"LOWER":mod}])
+
+    def apply(self, sequence: spacy.tokens.doc.Doc, probability: float = 1.0) -> (
+    bool, Union[str, spacy.tokens.doc.Doc]):
+        """See base class"""
+        applied = False
+        alt_sequence = ''
+
+        '''
+            Rule application logic
+                -> if single 'VERB' appears in seq
+                    -> Flip it with some randomly selected variant of its verb variant 
+                -> if more than one verb appears in the sequence, 
+                    -> Select one of the verb randomly and flip it. 
+        '''
+
+        for sent in sequence.sents:
+            print(sent)
+
+            # Apply matcher at each instance.
+            matches = self.matcher(sent.as_doc())  # as_doc might be buggy.
+            seq = ''
+
+            # Randomly select one if the number oif matches are less than 3 else select 2 (arbitary number)
+            if matches:
+                if len(matches) < 3:
+                    match = random.choices(matches, k=1)
+                else:
+                    match = random.choices(matches, k=1)
+
+            else:
+                alt_sequence += sent[:].text_with_ws
+                continue
+
+            old_end_id = 0
+
+            for match_id, start_id, end_id in match:
+                print(start_id, end_id)
+                print(sent[start_id].text)
+                # Generate the word.
+                new_word = self.verb_fom(word=sent[start_id].text)
+
+                # if the new generated word is not same than we have inflected the sentence.
+                if new_word != sent[start_id].text:
+                    applied = True
+
+                if start_id != 0:
+                    seq += sent[old_end_id:start_id].text_with_ws
+                    seq += new_word
+                    seq += utils.need_space_after_(token=sequence[start_id])
+                    old_end_id = end_id
+
+                else:
+                    seq += new_word.capitalize()  # Capitalize it.
+                    seq += utils.need_space_after_(token=sequence[start_id])
+                    old_end_id = end_id
+
+            seq += sent[old_end_id:].text_with_ws
+            alt_sequence += seq
+        return (True, self.nlp(alt_sequence)) if applied else (False, sequence)
+
+    @staticmethod
+    def examples():
+        # @TODO: Add more examples
+        pos_ex, neg_ex = [], []
+        pos_ex += [
+            "Although the problem would not be serious, people would still be afraid",
+        ]
+        neg_ex += [
+            "Medical technology during that time is not advanced enough to cure him.",
+            "This is America!"
+        ]
+        return pos_ex, neg_ex
+
+    @staticmethod
+    def verb_fom(word: str) -> str:
+
+        _k = 5
+        while _k != 0:
+            new_word = random.choices(res.modal_verbs)[0]
+            if new_word != word:
+                return new_word
+            else:
+                _k = _k - 1
+
+        return word
 
 
 if __name__ == "__main__":
