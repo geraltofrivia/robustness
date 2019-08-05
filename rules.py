@@ -11,6 +11,7 @@ from pattern.en import conjugate, lemma, lexeme, tenses
 
 # Local imports
 import utils
+from resources import gb_us
 
 class Rule:
     """Abstract class for common functionality of rules"""
@@ -78,7 +79,7 @@ class Rule:
         print(confusion_matrix(y_true, y_pred))
 
 
-class RuleOne(Rule):
+class Rule1(Rule):
     """
         **Transformation**:
             What VERB -> What's
@@ -135,7 +136,7 @@ class RuleOne(Rule):
         return pos_ex, neg_ex
 
 
-class RuleTwo(Rule):
+class Rule2(Rule):
     """
         **Transformation**:
             What NOUN -> Which NOUN
@@ -155,7 +156,7 @@ class RuleTwo(Rule):
         super().__init__(*args, **kwargs)
 
         self.pattern = [{'LOWER': 'what'}, {'POS': 'NOUN'}]
-        self.matcher.add("RuleTwo", None, self.pattern)
+        self.matcher.add("Rule2", None, self.pattern)
 
     def apply(self, sequence: spacy.tokens.doc.Doc, probability: float = 1) -> Union[str, spacy.tokens.doc.Doc]:
         """See base class"""
@@ -197,7 +198,7 @@ class RuleTwo(Rule):
         return pos_ex, neg_ex
 
 
-class RuleThree(Rule):
+class Rule3(Rule):
     """
         **Transformation**:
             What VERB -> So what VERB
@@ -217,7 +218,7 @@ class RuleThree(Rule):
         super().__init__(*args, **kwargs)
 
         self.pattern = [{'LOWER': 'what'}, {'POS': 'VERB'}]
-        self.matcher.add("RuleTwo", None, self.pattern)
+        self.matcher.add("Rule2", None, self.pattern)
 
     def apply(self, sequence: spacy.tokens.doc.Doc, probability: float = 1) -> (bool, Union[str, spacy.tokens.doc.Doc]):
         """See base class"""
@@ -280,7 +281,7 @@ class RuleThree(Rule):
         return pos_ex, neg_ex
 
 
-class RuleFour(Rule):
+class Rule4(Rule):
     """
         **Transformation**:
             What VBD -> And what VBD
@@ -337,7 +338,7 @@ class RuleFour(Rule):
         return pos_ex, neg_ex
 
 
-class RuleFive(Rule):
+class Rule5(Rule):
     """
         **Transformation**:
             WP VBZ -> WP's
@@ -357,7 +358,7 @@ class RuleFive(Rule):
         super().__init__(*args, **kwargs)
 
         self.pattern = [{'TAG': 'WP'}, {'TAG': 'VBZ'}]
-        self.matcher.add("RuleTwo", None, self.pattern)
+        self.matcher.add("Rule2", None, self.pattern)
 
     def apply(self, sequence: spacy.tokens.doc.Doc, probability: float = 1) -> (bool, Union[str, spacy.tokens.doc.Doc]):
         """See base class"""
@@ -403,7 +404,60 @@ class RuleFive(Rule):
         return pos_ex, neg_ex
 
 
-class RuleThirteen(Rule):
+class Rule6(Rule):
+    """
+        **Transformation**:
+            ..o.. -> ..ou.. (british-english conversion.)
+
+        **Source**:
+            [Paper] Semantically Equivalent Adversarial Rulesfor Debugging NLP Models
+
+        **Examples**
+            before: color
+            after: colour
+
+        **Comment**
+        Original intended task was `Visual Question Answering`
+        Using word pairs from
+            https://stackoverflow.com/questions/42329766/python-nlp-british-english-vs-american-english
+    """
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.word_pairs = gb_us.us_bg_lexpairs
+
+    def apply(self, sequence: spacy.tokens.doc.Doc, probability: float = 1) -> (bool, Union[str, spacy.tokens.doc.Doc]):
+        """ Simply lookup words and replace """
+        alt_sequence = ''
+        applied = False
+        old_end_id = 0
+
+        for tok in sequence:
+            if tok.lower_ in self.word_pairs:
+                applied = True
+                alt_sequence += sequence[old_end_id:tok.i].text_with_ws
+                alt_sequence += self.word_pairs[tok.lower_]
+                alt_sequence += utils.need_space_after_(tok)
+                old_end_id = tok.i + 1
+
+        alt_sequence += sequence[old_end_id:].text_with_ws
+
+        return (applied, self.nlp(alt_sequence)) if applied else (applied, sequence)
+
+    @staticmethod
+    def examples():
+        pos_ex, neg_ex = [], []
+        pos_ex += [
+            'What counselor Hahn wanted, only he knows.',
+            'which color is phony, do you reckon?'
+        ]
+        neg_ex += [
+            'this is the life we chose'
+        ]
+        return pos_ex, neg_ex
+
+
+class Rule14(Rule):
     """
         **Transformation**:
 
@@ -526,8 +580,9 @@ class RuleThirteen(Rule):
         # Step 3: Return the word
         return new_word
 
+
 if __name__ == "__main__":
     nlp = spacy.load("en_core_web_sm")
-    rule = RuleFive(nlp, verbose=True)
+    rule = Rule6(nlp, verbose=True)
 
     rule.test()
