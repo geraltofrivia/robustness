@@ -12,11 +12,7 @@ from pattern.en import conjugate, lemma, lexeme, tenses
 
 # Local imports
 import utils
-<<<<<<< HEAD
-from resources import gb_us
-=======
-from resources import resources as res
->>>>>>> ae18bb388b567bc86a0badb789c63a27dceb0fde
+from resources import resources as res, gb_us
 
 class Rule:
     """Abstract class for common functionality of rules"""
@@ -58,7 +54,7 @@ class Rule:
         """
         raise NotImplementedError("Examples are not specified for this class")
 
-    def test(self):
+    def test(self, prob=1):
         """ Go through pos and neg examples, and find what changed and what didn't. """
         print(f" -- Testing {type(self)} --")
 
@@ -71,7 +67,7 @@ class Rule:
         neg_ex = [self.nlp(doc) for doc in neg_ex]
 
         for doc in pos_ex + neg_ex:
-            changed, op = self.apply(doc)
+            changed, op = self.apply(doc, prob)
             y_pred.append(1 if changed and op.text != doc.text else 0)
 
             if self.verbose:
@@ -83,6 +79,10 @@ class Rule:
         print(y_pred)
         print(confusion_matrix(y_true, y_pred))
 
+    @staticmethod
+    def probabilistic_filter(prob):
+        """Syntactic sugar. Whether a rule should be applied or not."""
+        return random.uniform(0,1) < prob
 
 class Rule1(Rule):
     """
@@ -111,7 +111,7 @@ class Rule1(Rule):
         applied = False
 
         for sentence in sequence.sents:
-            if self._can_be_applied_(sentence):
+            if self._can_be_applied_(sentence) and self.probabilistic_filter(probability):
                 # If this is not the first sentence, check if the token _before_ this had space and add accordingly
                 # if sentence[0].i != 0:
                 #     alt_sequence += utils.need_space_after_(token=sequence[sentence[0].i-1])
@@ -167,21 +167,23 @@ class Rule2(Rule):
         """See base class"""
         applied = False
         matches = self.matcher(sequence)
-        altered_seq = ''
+        alt_sequence = ''
 
         old_end_id = 0
         for match_id, start_id, end_id in matches:
+            if not self.probabilistic_filter(probability):
+                continue
             applied = True
             if start_id == 0:
-                altered_seq += "Which "
+                alt_sequence += "Which "
                 old_end_id = end_id - 1
             else:
-                altered_seq += sequence[old_end_id:start_id].text
-                altered_seq += " Which "
+                alt_sequence += sequence[old_end_id:start_id].text
+                alt_sequence += " Which "
                 old_end_id = end_id - 1
-        altered_seq += sequence[old_end_id:].text
+        alt_sequence += sequence[old_end_id:].text
 
-        return (True, self.nlp(altered_seq)) if applied else (False, sequence)
+        return (True, self.nlp(alt_sequence)) if applied else (False, sequence)
 
     @staticmethod
     def examples():
@@ -243,6 +245,8 @@ class Rule3(Rule):
 
         old_end_id = 0
         for match_id, start_id, end_id in matches:
+            if not self.probabilistic_filter(probability):
+                continue
             if start_id == 0:
                 applied = True
                 alt_sequence += "So what"
@@ -309,7 +313,7 @@ class Rule4(Rule):
         alt_sequence = ''
 
         for sentence in sequence.sents:
-            if sentence[0].lower_ == 'what' and sentence[1].tag_ == 'VBD':
+            if sentence[0].lower_ == 'what' and sentence[1].tag_ == 'VBD' and self.probabilistic_filter(probability):
                 # Apply Rule
                 alt_sequence += 'And what'
                 alt_sequence += utils.need_space_after_(sentence[0])
@@ -373,6 +377,9 @@ class Rule5(Rule):
 
         old_end_id = 0
         for match_id, start_id, end_id in matches:
+            if not self.probabilistic_filter(probability):
+                continue
+
             applied = True
             if start_id == 0:
                 alt_sequence += sequence[start_id].text + "'s"
@@ -438,7 +445,7 @@ class Rule6(Rule):
         old_end_id = 0
 
         for tok in sequence:
-            if tok.lower_ in self.word_pairs:
+            if tok.lower_ in self.word_pairs and not self.probabilistic_filter(probability):
                 applied = True
                 alt_sequence += sequence[old_end_id:tok.i].text_with_ws
                 alt_sequence += self.word_pairs[tok.lower_]
@@ -462,10 +469,189 @@ class Rule6(Rule):
         return pos_ex, neg_ex
 
 
-class Rule14(Rule):
+class Rule7(Rule):
     """
         **Transformation**:
+            ..ou.. -> ..o.. (british-english conversion.)
 
+        **Source**:
+            [Paper] Semantically Equivalent Adversarial Rulesfor Debugging NLP Models
+
+        **Examples**
+            before: colour
+            after: color
+
+        **Comment**
+        Original intended task was `Visual Question Answering`
+        Using word pairs from
+            https://stackoverflow.com/questions/42329766/python-nlp-british-english-vs-american-english
+    """
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.word_pairs = {v:k for k,v in gb_us.us_bg_lexpairs.items()}
+
+    def apply(self, sequence: spacy.tokens.doc.Doc, probability: float = 1) -> (bool, Union[str, spacy.tokens.doc.Doc]):
+        """ Simply lookup words and replace """
+        alt_sequence = ''
+        applied = False
+        old_end_id = 0
+
+        for tok in sequence:
+            if tok.lower_ in self.word_pairs:
+                applied = True
+                alt_sequence += sequence[old_end_id:tok.i].text_with_ws
+                alt_sequence += self.word_pairs[tok.lower_]
+                alt_sequence += utils.need_space_after_(tok)
+                old_end_id = tok.i + 1
+
+        alt_sequence += sequence[old_end_id:].text_with_ws
+
+        return (applied, self.nlp(alt_sequence)) if applied else (applied, sequence)
+
+    @staticmethod
+    def examples():
+        pos_ex, neg_ex = [], []
+        pos_ex += [
+            'What counsellor Hahn wanted, only he knows.',
+            'which colour is phoney, do you reckon?'
+        ]
+        neg_ex += [
+            'this is the life we chose'
+        ]
+        return pos_ex, neg_ex
+
+
+class Rule8(Rule):
+    """
+        **Transformation**:
+            ADV VBZ -> ADV's
+
+        **Source**:
+            [Paper] Semantically Equivalent Adversarial Rulesfor Debugging NLP Models
+
+        **Examples**
+            before: Where is the jet?
+            after: Where's the jet?
+
+        **Comment**
+        Original intended task was `Visual Question Answering`
+        If the VBZ word has a "'s" or similar, skip this one.
+    """
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        self.pattern = [{'POS': 'ADV'}, {'TAG': 'VBZ'}]
+        self.matcher.add("Rule2", None, self.pattern)
+
+    def apply(self, sequence: spacy.tokens.doc.Doc, probability: float = 1) -> (bool, Union[str, spacy.tokens.doc.Doc]):
+        """See base class"""
+        applied = False
+        matches = self.matcher(sequence)
+        alt_sequence = ''
+
+        old_end_id = 0
+        for match_id, start_id, end_id in matches:
+            if sequence[end_id].text[0] == "'":
+                # The token is a 's or 'd, skip
+                continue
+
+            applied = True
+            alt_sequence += sequence[old_end_id: start_id].text_with_ws
+            alt_sequence += sequence[start_id].text
+            alt_sequence += "'s"
+            alt_sequence += utils.need_space_after_(sequence[end_id])
+            old_end_id = end_id
+
+        alt_sequence += sequence[old_end_id:].text_with_ws
+
+        if applied:
+            return True, self.nlp(alt_sequence)
+        else:
+            return False, sequence
+
+    @staticmethod
+    def examples():
+        pos_ex, neg_ex = [], []
+        pos_ex += [
+            "Where is the jet?",
+            "How is the jet?",
+            "And how is the jet?",
+            "Would you be so kind as to illustrate exactly how is the potato?",
+            "Where is the jet?"
+        ]
+        neg_ex += [
+            "How was the tomato?",
+            "Where's the jet coming from?",
+            "Where'd the jet come from?",
+            "Where did the jet come from?"
+        ]
+
+        return pos_ex, neg_ex
+
+
+class Rule13(Rule):
+    """
+        **Transformation**:
+            this -> that
+
+        **Source**:
+            [Paper] The CoNLL-2014 Shared Task on Grammatical Error Correction
+
+        **Examples**
+            before: Now this is a movie I like
+            after: Now that is a movie I like
+
+        **Comment**
+            Original intended task was `Grammar correction`
+        """
+    def apply(self, sequence: spacy.tokens.doc.Doc, probability: float = 1) -> (bool, Union[str, spacy.tokens.doc.Doc]):
+        """ see base class """
+        applied = False
+        old_end_id = 0
+        alt_sequence = ''
+
+        for token in sequence:
+            if token.lower_ == 'this':
+                applied = True
+                alt_sequence += sequence[old_end_id:token.i].text_with_ws
+                alt_sequence += 'that'
+                alt_sequence += utils.need_space_after_(token)
+
+                old_end_id = token.i + 1
+
+        alt_sequence += sequence[old_end_id:].text_with_ws
+
+        if applied:
+            return applied, self.nlp(alt_sequence)
+        else:
+            return applied, sequence
+
+    @staticmethod
+    def examples():
+        pos_ex, neg_ex = [], []
+        pos_ex += [
+            "Is this the real life?",
+            "tell me this: who told you this?",
+            "tell me this: who told you that?",
+            "this that this that and then some more of this.",
+            "What if the last word was this",
+            "and what if it were 'this'",
+            "this's how its done!"
+        ]
+        neg_ex += [
+            "That's how its done",
+            "tell me that: who told you that",
+            "the rose and the thistle they both have thorns.",
+            "Where did the jet come from?"
+        ]
+
+        return pos_ex, neg_ex
+
+
+class Rule15(Rule):
+    """
+        **Transformation**:
 
             To create inflexions by switching one of the verb in the sentence to its other tense. This would result in
             verb disagreement.
@@ -586,10 +772,9 @@ class Rule14(Rule):
         return new_word
 
 
-class Rule15(Rule):
+class Rule16(Rule):
     """
         **Transformation**:
-
 
             To create inflexions by switching one of the modal verb in the sentence to its other tense.
             This would result in modal verb disagreement.
@@ -699,6 +884,6 @@ class Rule15(Rule):
 
 if __name__ == "__main__":
     nlp = spacy.load("en_core_web_sm")
-    rule = Rule6(nlp, verbose=True)
+    rule = Rule1(nlp, verbose=True)
 
-    rule.test()
+    rule.test(prob=0.3)
