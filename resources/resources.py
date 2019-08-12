@@ -10,3 +10,4 @@ modal_verbs_pair = [["can", "could"],
                     ["shall", "should"],
                     ["will", "would"]]
 
+wh_phrases = ["What", "When", "How", "Which"]
