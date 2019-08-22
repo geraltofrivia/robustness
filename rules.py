@@ -688,7 +688,6 @@ class Rule15(Rule):
         '''
 
         for sent in sequence.sents:
-            print(sent)
 
             # Apply matcher at each instance.
             matches = self.matcher(sent.as_doc())  # as_doc might be buggy.
@@ -708,8 +707,7 @@ class Rule15(Rule):
             old_end_id = 0
 
             for match_id, start_id, end_id in match:
-                print(start_id, end_id)
-                print(sent[start_id].text)
+
                 # Generate the word.
                 new_word = self.verb_fom(word=sent[start_id].text)
 
@@ -811,7 +809,6 @@ class Rule16(Rule):
         '''
 
         for sent in sequence.sents:
-            print(sent)
 
             # Apply matcher at each instance.
             matches = self.matcher(sent.as_doc())  # as_doc might be buggy.
@@ -831,8 +828,7 @@ class Rule16(Rule):
             old_end_id = 0
 
             for match_id, start_id, end_id in match:
-                print(start_id, end_id)
-                print(sent[start_id].text)
+
                 # Generate the word.
                 new_word = self.verb_fom(word=sent[start_id].text)
 
