@@ -767,7 +767,7 @@ class Rule15(Rule):
         new_word = conjugate(word, tense=tense_string, person=final_tense[1], number=final_tense[2], negated=False)
 
         # Step 3: Return the word
-        return new_word
+        return new_word if new_word is not None else word
 
 
 class Rule16(Rule):
