@@ -746,6 +746,9 @@ class Rule15(Rule):
         # Step 1: check if the word is in present tense or past.
         tense_list = tenses(word)
 
+        if tense_list is None or len(tense_list) == 0:
+            return word
+
         present_tense = True
 
         for index, i in enumerate(tense_list):
